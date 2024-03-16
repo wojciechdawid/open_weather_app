@@ -1,0 +1,2 @@
+CREATE INDEX IF NOT EXISTS weather_10km_current_id_idx ON weather_10km_current USING btree(id);
+CREATE INDEX IF NOT EXISTS weather_10km_current_id_geom_idx ON weather_10km_current USING btree(id_geom);
