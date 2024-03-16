@@ -1,26 +1,24 @@
-import requests
-import json
-from sqlalchemy.sql import text
-import pandas as pd
+import geopandas as gpd
 
 from config.api_config import API_KEYS, DB_CONFIG
 from operations import DbConnector
-"""
-API_key = API_KEYS[0]
 
-response_api = requests.get(f'https://api.openweathermap.org/data/2.5/weather?lat=44.34&lon=10.99&appid={API_key}')
-data = response_api.text
 
-parse_json = json.loads(data)
+if __name__ == "__main__":
+    # DbConnector.query_db_file('create_10km_table')
+    table_name = DB_CONFIG["tables"]["10k"]
+    query = f"Select * from {table_name}"
+    df = gpd.GeoDataFrame.from_postgis(query, DbConnector.connect_db())
 
-print(parse_json)
-"""
-table_name = DB_CONFIG["tables"]["10k"]
-query = f"Select count(*) from {table_name}"
+    for i in range(len(df)):
+        one_row = df.iloc[i]
+        id_row = one_row.id
+        lat = one_row.geom.centroid.y
+        long = one_row.geom.centroid.x
+        res_api = DbConnector.get_api_values(lat=lat, long=long)
+        DbConnector.insert_values(id_row, DB_CONFIG["tables"]["current_10k"], res_api)
 
-results = DbConnector.query_db(query)
+# TODO: expedite the process: maybe calculate lat and long in postgis
 
-df = pd.DataFrame(results)
-print(df)
 
 

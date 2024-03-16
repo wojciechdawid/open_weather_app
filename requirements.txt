@@ -2,7 +2,7 @@ setuptools
 requests
 psycopg2
 sqlalchemy
-GeoAlchemy2
+# GeoAlchemy2
 numpy
 pandas
-
+geopandas
