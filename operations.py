@@ -45,16 +45,20 @@ class DbConnector:
                 conn.execute(query)
 
     @staticmethod
-    def get_api_values(i: int, lat: float, long: float) -> dict:
+    def get_api_values(i: int, current: bool, lat: float, long: float) -> dict:
         api_key = API_KEYS[i % DbConnector.api_nr]
-        response_api = requests.get(f'https://api.openweathermap.org/data/2.5/weather?lat='
+        if current:
+            weather_type = "weather"
+        else:
+            weather_type = "forecast"
+        response_api = requests.get(f'https://api.openweathermap.org/data/2.5/{weather_type}?lat='
                                     f'{lat}&lon={long}&units=metric&appid={api_key}')
         data = response_api.text
         return json.loads(data)
 
     @staticmethod
-    def insert_values(geom_id: int, last_update, table_name: str, json_api: dict) -> str:
-        temperature = json_api["main"]["feels_like"]
+    def insert_values_current(geom_id: int, last_update, table_name: str, json_api: dict) -> str:
+        temperature = json_api["main"]["temp"]
         temperature_max = json_api["main"]["temp_max"]
         temperature_min = json_api["main"]["temp_min"]
         humidity = json_api["main"]["humidity"]
@@ -94,6 +98,62 @@ class DbConnector:
         return sql_query
 
     @staticmethod
+    def insert_values_forecast(geom_id: int, table_name: str, json_api: dict) -> list[str]:
+        weather_list = json_api["list"]
+        name = json_api["city"]["name"]
+        country = json_api["city"]["country"]
+        sunrise = datetime.datetime.fromtimestamp(json_api["city"]["sunrise"])
+        sunset = datetime.datetime.fromtimestamp(json_api["city"]["sunset"])
+
+        forecast_list = []
+
+        for i in weather_list:
+            temperature = i["main"]["temp"]
+            temperature_max = i["main"]["temp_max"]
+            temperature_min = i["main"]["temp_min"]
+            humidity = i["main"]["humidity"]
+            pressure = i["main"]["pressure"]
+            wind_speed = i["wind"]["speed"]
+            wind_direction = i["wind"]["deg"]
+            clouds = i["clouds"]["all"]
+            if "visibility" not in i:
+                visibility = 0
+            else:
+                visibility = i["visibility"]
+            last_update = datetime.datetime.fromtimestamp(i["dt"])
+            weather_type = i["weather"][0]["main"]
+            weather_code = i["weather"][0]["id"]
+            weather_desc = i["weather"][0]["description"]
+            probability_precipitation = i["pop"]
+
+            if "rain" in i:
+                precip_type = "rain"
+                precip_value = i["rain"]["3h"]
+            elif "snow" in i:
+                precip_type = "snow"
+                precip_value = i["snow"]["3h"]
+            else:
+                precip_type = "no"
+                precip_value = 0
+
+            sql_query = f"INSERT INTO {table_name} (id_geom, temperature, temperature_max, temperature_min, humidity, pressure, " \
+                    f"wind_speed, wind_direction, clouds, visibility, sunrise, sunset, last_update, name, country, weather_type, " \
+                    f"weather_code, weather_desc, precip_type, precip_value, precip_chance) VALUES ({geom_id}, {temperature}, {temperature_max}, " \
+                    f"{temperature_min}, {humidity}, {pressure}, {wind_speed}, {wind_direction}, {clouds}, {visibility}, " \
+                    f"'{sunrise}', '{sunset}', '{last_update}', '{name}', '{country}', '{weather_type}', {weather_code}, '{weather_desc}', " \
+                    f"'{precip_type}', {precip_value}, {probability_precipitation});\n"
+
+            output = {geom_id, temperature, temperature_max, temperature_min, humidity, pressure, wind_speed,
+                  wind_direction, clouds,
+                  visibility, sunrise, sunset, last_update, name, country, weather_type, weather_code, weather_desc,
+                  precip_type, precip_value}
+
+            forecast_list.append(sql_query)
+
+        return forecast_list
+
+    @staticmethod
+    # TODO!!
     def create_gdf_result():
         table_name = DB_CONFIG["tables"]["maz_10k"]
         query = f"Select * from {table_name}"
@@ -116,7 +176,7 @@ class DbConnector:
         return pd.DataFrame.from_dict(final_dict, orient="index")
 
     @staticmethod
-    def update_history(table_current: str, table_history :str) -> tuple:
+    def update_history(table_current: str, table_history: str) -> tuple:
         update = f"INSERT INTO {table_history} SELECT * FROM {table_current};"
         delete = f"DELETE FROM {table_history} WHERE last_update < now() - interval '7 days';"
         return update, delete

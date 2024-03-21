@@ -1,8 +1,8 @@
 setuptools
-requests
-psycopg2
-sqlalchemy
+requests~=2.31.0
+psycopg2~=2.9.9
+sqlalchemy~=2.0.28
 progressbar2
 numpy
-pandas
-geopandas
+pandas~=2.2.1
+geopandas~=0.14.3

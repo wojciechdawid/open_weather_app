@@ -1,7 +1,6 @@
-import datetime
-import warnings
 import geopandas as gpd
 import time
+import warnings
 from progressbar import ProgressBar
 from psycopg2.errors import SyntaxError
 from sqlalchemy.sql import text
@@ -19,26 +18,22 @@ if __name__ == "__main__":
 
     df["lat"] = df.geom.centroid.y
     df["long"] = df.geom.centroid.x
-    last_update = datetime.datetime.now()
 
     db_conn = DbConnector.connect_db()
     with db_conn.connect() as con:
-        con.execute(text(f"TRUNCATE {DB_CONFIG['tables']['current_maz_10k']}"))
+        con.execute(text(f"TRUNCATE {DB_CONFIG['tables']['forecast_maz_10k']}"))
         for i in range(len(df)):
             one_row = df.iloc[i]
             id_row = one_row.id
-            res_api = DbConnector.get_api_values(i=i, current=True, lat=one_row.lat, long=one_row.long)
+            res_api = DbConnector.get_api_values(i=i, current=False, lat=one_row.lat, long=one_row.long)
             time.sleep(0.1)
-            sql_query = DbConnector.insert_values_current(id_row, last_update, DB_CONFIG["tables"]["current_maz_10k"], res_api)
-            try:
-                con.execute(text(sql_query))
-            except SyntaxError:
-                raise SyntaxError
+            sql_query = DbConnector.insert_values_forecast(id_row, DB_CONFIG["tables"]["forecast_maz_10k"], res_api)
+            for query in sql_query:
+                try:
+                    con.execute(text(query))
+                except SyntaxError:
+                    raise SyntaxError
             bar.update(i)
-        con.execute(text("COMMIT;"))
-        update_rows, del_rows = DbConnector.update_history(DB_CONFIG['tables']['current_maz_10k'], DB_CONFIG['tables']['history_maz_10k'])
-        con.execute(text(update_rows))
-        con.execute(text(del_rows))
         con.execute(text("COMMIT;"))
 
     # df = DbConnector.create_gdf_result()
